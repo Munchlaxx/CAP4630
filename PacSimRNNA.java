@@ -1,9 +1,16 @@
-import java.awt.Point;
 
+/*
+* University of Central Florida
+* CAP4630 - Spring 2019
+* Authors: <John Mirschel, Wen Lam>
+*/
+
+
+import java.awt.Point;
+import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedList;
-
 import pacsim.BFSPath;
 import pacsim.PacAction;
 import pacsim.PacCell;
@@ -25,7 +32,7 @@ public class PacSimRNNA implements PacAction {
 	}
 	
 	public static void main(String[] args) {
-		System.out.println("\nTSP using RNNA agent by :");
+		System.out.println("\nTSP using Repetitive Nearset Neighbor Algorithm by John Mirschel and Wen Lam:");
 		System.out.println("\nMaze: " + args[0] + "\n");
 		new PacSimRNNA(args[0]);
 	}
@@ -42,6 +49,7 @@ public class PacSimRNNA implements PacAction {
 		PacCell[][] grid = (PacCell[][]) state;
 		PacmanCell pc = PacUtils.findPacman(grid);
 		List<Possible> finalPaths = new ArrayList<>();
+		List<Possible> populationOne = new ArrayList<>();
 		
 		if(pc == null) {
 			return null;
@@ -55,41 +63,67 @@ public class PacSimRNNA implements PacAction {
 			costTable = new int[locArray.size()][locArray.size()];
 			
 			// Fill the cost table with values of distance between all the points, including pacman
+			System.out.println("Cost table: \n");
 			for(int i = 0; i < locArray.size(); i++) {
 				for(int j = 0; j < locArray.size(); j++) {
 					costTable[i][j] = BFSPath.getPath(grid, locArray.get(i), locArray.get(j)).size();
+					System.out.printf(" %3d", costTable[i][j]);
 				}
+
+				System.out.println();
 			}
+
+			// Printing and sorting the food array.
+			System.out.println("\nFood Array: \n");
+			locArray.remove(0);
+			locArray.sort(Comparator.comparing(Point::getX).thenComparing(Point::getY));
+			for(int i = 0; i < locArray.size(); i++){
+				System.out.println(i + ": (" + (int)locArray.get(i).getX() + ", " + (int)locArray.get(i).getY() + ")");
+				populationOne.add(new Possible(costTable[i + 1][0], foodArray.get(i), costTable[i + 1][0]));
+			}
+
+			populationOne.sort(Comparator.comparing(Possible::getDistance));
+
+			System.out.println("Population at step 1 :");
+
+			// for(int i = 0; i < populationOne.size(); i++){
+			// 	System.out.println(i + ": cost=" + populationOne.get(i).getDistance() + " : [(" + (int)populationOne.get(i).getPath().get(0).getX() + "," + 
+			// 		(int)populationOne.get(i).getPath().get(0).getY() + "), " + populationOne.get(i).getDistance() + "]");
+			// }
+
+			printPopulation(populationOne);
+
+
 			
 			// Loop through all starting food pellet from pacman
 			for(int i = 1; i <= foodArray.size(); i++) {
 				Possible path = new Possible();
-				List<Possible> finalize = new ArrayList<>();
+				//List<Possible> finalize = new ArrayList<>();
 				List<Integer> indexes = new ArrayList<>();
 				
 				// Create the initial list of food pellets
-				path.add(costTable[i][0], foodArray.get(i - 1));
+				path.add(costTable[i][0], foodArray.get(i - 1), costTable[i][0]);
 				for(int j = 1; j <= foodArray.size(); j++){
 					indexes.add(j);
 				}
 				
 				// Call to start searching for paths and branches
-				rec(path, finalize, indexes, i);
+				rec(path, finalPaths, indexes, i);
 				
-				// Keep track of the minimum distance and the path itself
-				int min = Integer.MAX_VALUE;
-				Possible savedPath = null;
+				// // Keep track of the minimum distance and the path itself
+				// int min = Integer.MAX_VALUE;
+				// Possible savedPath = null;
 				
-				// Loop for the minimum distance and path
-				for(int j = 0; j < finalize.size(); j++){
-					if(finalize.get(j).getDistance() < min){
-						savedPath = finalize.get(j);
-						min = finalize.get(j).getDistance();
-					}
-				}
+				// // Loop for the minimum distance and path
+				// for(int j = 0; j < finalize.size(); j++){
+				// 	if(finalize.get(j).getDistance() < min){
+				// 		savedPath = finalize.get(j);
+				// 		min = finalize.get(j).getDistance();
+				// 	}
+				// }
 				
 				// Add the path with the shortest distance for that initial start
-				finalPaths.add(savedPath);
+				// finalPaths.add(savedPath);
 			}
 			
 			// Keep track of the minimum distance and path of all starting food pellet
@@ -103,6 +137,11 @@ public class PacSimRNNA implements PacAction {
 					minPath = finalPaths.get(i).getDistance();
 				}
 			}
+
+			finalPaths.sort(Comparator.comparing(Possible::getDistance));
+			printPopulation(finalPaths);
+
+			fastestPath = finalPaths.get(0);
 			
 			System.out.println(fastestPath.getDistance());
 		}
@@ -130,7 +169,6 @@ public class PacSimRNNA implements PacAction {
 	public void rec(Possible path, List<Possible> finalize, List<Integer> indexes, int current) {
 		// Value to keep track of minimum distance and index of it
 		int min = Integer.MAX_VALUE;
-		int index = 0;
 		
 		// Remove the current food pellet
 		for(Integer value: indexes) {
@@ -139,6 +177,7 @@ public class PacSimRNNA implements PacAction {
 				break;
 			}
 		}
+
 		
 		// End the recursion if all food pellets are gone
 		if(indexes.size() == 0) {
@@ -150,7 +189,7 @@ public class PacSimRNNA implements PacAction {
 		for(int i = 0; i < indexes.size(); i++) {
 			if(costTable[current][indexes.get(i)] < min) {
 				min = costTable[current][indexes.get(i)];
-				index = indexes.get(i);
+
 			}
 		}
 		
@@ -159,47 +198,91 @@ public class PacSimRNNA implements PacAction {
 			if(costTable[current][indexes.get(i)] == min) {
 				
 				// Copy the path because of passed by reference
-				Possible pathCopy = path.copy();
-				pathCopy.add(min, foodArray.get(index - 1));
+				Possible pathCopy = null;
+				pathCopy = path.copy();
+				pathCopy.add(min, foodArray.get(indexes.get(i) - 1), costTable[current][indexes.get(i)]);
 				
 				// Copy the indexes because of passed by reference
 				List<Integer> indexesCopy = new ArrayList<>();
 				indexesCopy.addAll(indexes);
 				
 				// Continue the path or create a new branch
-				rec(pathCopy, finalize, indexesCopy, index);
+				rec(pathCopy, finalize, indexesCopy, indexes.get(i));
 			}
 		}
 	}
 
+	public void printPopulation(List<Possible> path){
+
+		for(int i = 0; i < path.size(); i++) {
+            System.out.print(i + ": cost=" + path.get(i).getDistance() + " : ");
+
+            for(int j = 0; j < path.get(i).getSize(); j++) {
+                System.out.print("[(" + (int) path.get(i).getPath().get(j).getX() + "," + (int) path.get(i).getPath().get(j).getY()  + ")," + path.get(i).getPellet().get(j) + "]");
+            }
+
+            System.out.println();
+        }
+	}
+
 	// Class to save the path points and the distance
-	class Possible {
+	class Possible{
 		private int distance;
+		private List<Integer> pelletDistance;
 		private List<Point> path;
 		
 		// Constructor
 		Possible() {
 			this.distance = 0;
-			path = new ArrayList<>();
+			this.path = new ArrayList<>();
+			this.pelletDistance = new ArrayList<>();
+		}
+
+		// Constructor
+		Possible(int dist, Point init, int pellet) {
+			this.distance = dist;
+			this.path = new ArrayList<>();
+			this.path.add(init);
+			this.pelletDistance = new ArrayList<>();
+			this.pelletDistance.add(pellet);
 		}
 		
+
+		// @Override
+  //   	public int compareTo(Possible other){
+  //       // compareTo should return < 0 if this is supposed to be
+  //       // less than other, > 0 if this is supposed to be greater than 
+  //       // other and 0 if they are supposed to be equal
+  //       // int dist = this.distance.compareTo(other.distance);
+  //       return getDistance().compareTo(other.getDistance());
+  //   }
 		// Add the point and path distance
-		public void add(int dist, Point next) {
+		public void add(int dist, Point next, int pellet) {
 			this.distance += dist;
 			this.path.add(next);
+			this.pelletDistance.add(pellet);
 		}
 		
 		// Used to copy a path if there is a branching
 		public Possible copy() {
 			Possible copy = new Possible();
 			copy.distance = this.distance;
-			copy.path = this.path;
+			
+			for(int i = 0; i < this.path.size(); i++){
+				copy.path.add(this.path.get(i));
+				copy.pelletDistance.add(this.pelletDistance.get(i));
+			}
 			return copy;
 		}
 		
 		// Return distance
 		public int getDistance() {
 			return this.distance;
+		}
+
+		// Return pellet
+		public List<Integer> getPellet() {
+			return this.pelletDistance;
 		}
 		
 		// Return size of the path
