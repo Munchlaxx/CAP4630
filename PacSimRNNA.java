@@ -25,6 +25,7 @@ public class PacSimRNNA implements PacAction {
 	private List<Point> locArray;
 	private List<Point> foodArray;
 	private int[][] costTable;
+	private Possible fastestPath;
 	
 	public PacSimRNNA(String fname) {
 		PacSim sim = new PacSim(fname);
@@ -57,6 +58,7 @@ public class PacSimRNNA implements PacAction {
 		
 		// Check if the food array is null, if null, occur once start RNNA
 		if(foodArray == null) {
+			long start = System.currentTimeMillis();
 			foodArray = PacUtils.findFood(grid);
 			locArray = PacUtils.findFood(grid);
 			locArray.add(0, pc.getLoc());
@@ -83,14 +85,6 @@ public class PacSimRNNA implements PacAction {
 			}
 
 			populationOne.sort(Comparator.comparing(Possible::getDistance));
-
-			System.out.println("Population at step 1 :");
-
-			// for(int i = 0; i < populationOne.size(); i++){
-			// 	System.out.println(i + ": cost=" + populationOne.get(i).getDistance() + " : [(" + (int)populationOne.get(i).getPath().get(0).getX() + "," + 
-			// 		(int)populationOne.get(i).getPath().get(0).getY() + "), " + populationOne.get(i).getDistance() + "]");
-			// }
-
 			printPopulation(populationOne);
 
 
@@ -98,7 +92,6 @@ public class PacSimRNNA implements PacAction {
 			// Loop through all starting food pellet from pacman
 			for(int i = 1; i <= foodArray.size(); i++) {
 				Possible path = new Possible();
-				//List<Possible> finalize = new ArrayList<>();
 				List<Integer> indexes = new ArrayList<>();
 				
 				// Create the initial list of food pellets
@@ -109,26 +102,11 @@ public class PacSimRNNA implements PacAction {
 				
 				// Call to start searching for paths and branches
 				rec(path, finalPaths, indexes, i);
-				
-				// // Keep track of the minimum distance and the path itself
-				// int min = Integer.MAX_VALUE;
-				// Possible savedPath = null;
-				
-				// // Loop for the minimum distance and path
-				// for(int j = 0; j < finalize.size(); j++){
-				// 	if(finalize.get(j).getDistance() < min){
-				// 		savedPath = finalize.get(j);
-				// 		min = finalize.get(j).getDistance();
-				// 	}
-				// }
-				
-				// Add the path with the shortest distance for that initial start
-				// finalPaths.add(savedPath);
 			}
 			
 			// Keep track of the minimum distance and path of all starting food pellet
 			int minPath = Integer.MAX_VALUE;
-			Possible fastestPath = null;
+			fastestPath = null;
 			
 			// Loop for the path with the minimun distance
 			for(int i = 0; i < finalPaths.size(); i++){
@@ -138,31 +116,27 @@ public class PacSimRNNA implements PacAction {
 				}
 			}
 
-			finalPaths.sort(Comparator.comparing(Possible::getDistance));
+			finalPaths.sort(Comparator.comparing(Possible::getDistance));			
 			printPopulation(finalPaths);
 
 			fastestPath = finalPaths.get(0);
 			
-			System.out.println(fastestPath.getDistance());
+			long end = System.currentTimeMillis();
+			System.out.println("\nTime to generate plan: " + (end - start) + " msec");
+			System.out.println("\nSolution Moves: \n");
 		}
-		
-		if( path.isEmpty() ) {
-         Point tgt = PacUtils.nearestFood( pc.getLoc(), grid);
-         path = BFSPath.getPath(grid, pc.getLoc(), tgt);
+			if( path.isEmpty() ) {
+	         Point tgt = fastestPath.getPath().remove(0);
+	         path = BFSPath.getPath(grid, pc.getLoc(), tgt);
 
-         System.out.println("Pac-Man currently at: [ " + pc.getLoc().x
-               + ", " + pc.getLoc().y + " ]");
-         System.out.println("Setting new target  : [ " + tgt.x
-               + ", " + tgt.y + " ]");
-		}
+			}
       
-      // take the next step on the current path
-      
-      Point next = path.remove( 0 );
-      PacFace face = PacUtils.direction( pc.getLoc(), next );
-      System.out.printf( "%5d : From [ %2d, %2d ] go %s%n", 
-            ++simTime, pc.getLoc().x, pc.getLoc().y, face );
-      return face;
+	      // take the next step on the current path      
+	      Point next = path.remove( 0 );
+	      PacFace face = PacUtils.direction( pc.getLoc(), next );
+	      System.out.printf( "%5d : From [ %2d, %2d ] go %s%n", 
+	            ++simTime, pc.getLoc().x, pc.getLoc().y, face );
+	      return face;
 	}
 	
 	// Recursion to determine the paths and branches
@@ -213,9 +187,9 @@ public class PacSimRNNA implements PacAction {
 	}
 
 	public void printPopulation(List<Possible> path){
-
+		System.out.println("\nPopulation at step " + path.get(0).getSize() + " :");
 		for(int i = 0; i < path.size(); i++) {
-            System.out.print(i + ": cost=" + path.get(i).getDistance() + " : ");
+            System.out.print("   " + i + " : cost=" + path.get(i).getDistance() + " : ");
 
             for(int j = 0; j < path.get(i).getSize(); j++) {
                 System.out.print("[(" + (int) path.get(i).getPath().get(j).getX() + "," + (int) path.get(i).getPath().get(j).getY()  + ")," + path.get(i).getPellet().get(j) + "]");
@@ -247,15 +221,6 @@ public class PacSimRNNA implements PacAction {
 			this.pelletDistance.add(pellet);
 		}
 		
-
-		// @Override
-  //   	public int compareTo(Possible other){
-  //       // compareTo should return < 0 if this is supposed to be
-  //       // less than other, > 0 if this is supposed to be greater than 
-  //       // other and 0 if they are supposed to be equal
-  //       // int dist = this.distance.compareTo(other.distance);
-  //       return getDistance().compareTo(other.getDistance());
-  //   }
 		// Add the point and path distance
 		public void add(int dist, Point next, int pellet) {
 			this.distance += dist;
