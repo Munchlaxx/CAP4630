@@ -60,56 +60,51 @@ public class PacSimMinimax implements PacAction {
 		PacmanCell pc = PacUtils.findPacman(grid);
 		
 		List<PossibleDir> scores = new ArrayList<>();
-		minimax(grid, scores, 0, true, 0);
+		PossibleDir score = new PossibleDir();
+		minimax(grid, score, scores, 0, true);
 
 		scores.sort(Comparator.comparing(PossibleDir::getScore));
-		
-		for(int i = 0; i < scores.size(); i++) {
-			System.out.println(scores.get(i).getPoint() + ":" + scores.get(i).getScore());
-		}
-		System.out.println();
 		
 		Point next = scores.get(scores.size() - 1).getPoint();
 		PacFace face = PacUtils.direction(pc.getLoc(), next);
 		return face;
     }
 	
-	public void minimax(PacCell[][] grid, List<PossibleDir> scores, int treeDepth, boolean isMax, int current) {
+	public void minimax(PacCell[][] grid, PossibleDir score, List<PossibleDir> scores, int treeDepth, boolean isMax) {
 		if(treeDepth == depth){
+			scores.add(score);
 			return;
 		}
-
+		
 		PacmanCell pacman = PacUtils.findPacman(grid);
 		List<Point> ghosts = PacUtils.findGhosts(grid);
-		PacCell[][] newGrid;// = grid.clone();
+		PacCell[][] newGrid = grid.clone();
 		
 		if(isMax == true) {
 			for(int i = 0; i < 4; i++) {
 				PacCell location = grid[pacman.getX() + xDir[i]][pacman.getY() + yDir[i]];
 				Point movement = new Point(location.getX(), location.getY());
-
+				
 				// Skip if pacman cannot move that direction (temporary)
 				if(location instanceof pacsim.WallCell == true || location instanceof pacsim.GhostCell == true) {
 					continue;
 				}
 
-				if(treeDepth == 0) {
-					scores.add(new PossibleDir());
-					current++;
-				}
+				PossibleDir scoreCopy = null;
+				scoreCopy = score.copy();
 				
 				// Add score based off value (temporary)
 				if(location instanceof pacsim.FoodCell == true) {
-					scores.get(current - 1).add(5, movement);
+					scoreCopy.add(200, movement);
 				} else if(location instanceof pacsim.PowerCell == true) {
-					scores.get(current - 1).add(10, movement);
+					scoreCopy.add(100, movement);
 				} else {
-					scores.get(current - 1).add(0, movement);
+					scoreCopy.add(0, movement);
 				}
-
+				
 				newGrid = PacUtils.movePacman(pacman.getLoc(), movement, grid);
 				
-				minimax(newGrid, scores, treeDepth, false, current);
+				minimax(newGrid, scoreCopy, scores, treeDepth, false);
 			}
 		} else {
 			for(int i = 0; i < 4; i++) {
@@ -120,11 +115,18 @@ public class PacSimMinimax implements PacAction {
 					continue;
 				}
 				
-				newGrid = PacUtils.moveGhost(ghosts.get(0), ghost1.getLoc(), grid);
+				PossibleDir scoreCopy1 = null;
+				scoreCopy1 = score.copy();
 				
-				int score1 = BFSPath.getPath(newGrid, pacman.getLoc(), ghost1.getLoc()).size();
-				scores.get(current - 1).add(-(1000 - score1), null);
-		
+				if(ghost1 instanceof pacsim.PacmanCell == true) {
+					scoreCopy1.add(-100000, null);
+				} else {
+					newGrid = PacUtils.moveGhost(ghosts.get(0), ghost1.getLoc(), grid);
+
+					int score1 = BFSPath.getPath(newGrid, pacman.getLoc(), ghost1.getLoc()).size();
+					scoreCopy1.add(-(100 - score1), null);
+				}
+				
 				for(int j = 0; j < 4; j++) {
 					PacCell ghost2 = grid[ghosts.get(1).x + xDir[j]][ghosts.get(1).y + yDir[j]];
 					
@@ -133,12 +135,19 @@ public class PacSimMinimax implements PacAction {
 						continue;
 					}
 					
-					int score2 = BFSPath.getPath(newGrid, pacman.getLoc(), ghost2.getLoc()).size();
-					scores.get(current - 1).add(-(1000 - score2), null);
-			
-					newGrid = PacUtils.moveGhost(ghosts.get(1), ghost2.getLoc(), newGrid);
+					PossibleDir scoreCopy2 = null;
+					scoreCopy2 = scoreCopy1.copy();
 					
-					minimax(newGrid, scores, treeDepth + 1, true, current);
+					if(ghost2 instanceof pacsim.PacmanCell == true) {
+						scoreCopy2.add(-100000, null);
+					} else {
+						newGrid = PacUtils.moveGhost(ghosts.get(1), ghost2.getLoc(), newGrid);
+
+						int score2 = BFSPath.getPath(newGrid, pacman.getLoc(), ghost2.getLoc()).size();
+						scoreCopy2.add(-(100 - score2), null);
+					}
+				
+					minimax(newGrid, scoreCopy2, scores, treeDepth + 1, true);
 				}
 			}
 		}
@@ -158,6 +167,17 @@ public class PacSimMinimax implements PacAction {
 				this.point = p;
 			}
 			this.score += s;
+		}
+		
+		public PossibleDir copy() {
+			PossibleDir copy = new PossibleDir();
+			copy.score = this.score;
+			if(this.point == null) {
+				copy.point = null;
+			} else {
+				copy.point = new Point(this.point.x, this.point.y);
+			}
+			return copy;
 		}
 		
 		public Point getPoint() {
