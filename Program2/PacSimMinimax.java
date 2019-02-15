@@ -18,7 +18,7 @@ public class PacSimMinimax implements PacAction {
     private int depth;
 	private int[] xDir = {1, -1, 0,  0};
 	private int[] yDir = {0,  0, 1, -1};
-	HashMap<Point,Integer> visited = new HashMap<>();
+	HashMap<Point,Integer> visited;
 	  
 	public PacSimMinimax( int depth, String fname, int te, int gran, int max ) {
 		
@@ -53,7 +53,9 @@ public class PacSimMinimax implements PacAction {
 	}
 
 	@Override
-	public void init() {}
+	public void init() {
+		visited = new HashMap<>();
+	}
 	   
 	@Override
 	public PacFace action( Object state ) {
@@ -64,9 +66,7 @@ public class PacSimMinimax implements PacAction {
 		List<PossibleDir> scores = new ArrayList<>();
 		PossibleDir score = new PossibleDir();
 		HashMap<Point,Integer> visitedCopy = copyHash(visited);
-		System.out.println(visited);
 		minimax(grid, score, scores, visitedCopy, 0, true);
-		
 		scores.sort(Comparator.comparing(PossibleDir::getScore));
 		
 		Point next = scores.get(scores.size() - 1).getPoint();
@@ -75,12 +75,6 @@ public class PacSimMinimax implements PacAction {
 		} else {
 			visited.put(next, -10);
 		}
-		/*
-		for(int i = 0; i < scores.size(); i++) {
-			System.out.println(scores.get(i).getScore());
-		}
-		System.out.println();
-		*/
 		
 		PacFace face = PacUtils.direction(pc.getLoc(), next);
 		return face;
