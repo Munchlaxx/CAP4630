@@ -7,6 +7,7 @@ import java.util.HashMap;
 import pacsim.BFSPath;
 import pacsim.PacAction;
 import pacsim.PacCell;
+import pacsim.GhostCell;
 import pacsim.PacFace;
 import pacsim.PacSim;
 import pacsim.PacUtils;
@@ -14,16 +15,18 @@ import pacsim.PacmanCell;
 
 public class PacSimMinimax implements PacAction {
 	
-	//Optional: class and instance variables
     private int depth;
-	private int[] xDir = {1, -1, 0,  0};
-	private int[] yDir = {0,  0, 1, -1};
-	HashMap<Point,Integer> visited;
+	private int fear;
+	HashMap<Point, Double> visited;
+	
+	// Up, Right, Down, Left
+	private int[] xDir = {0, 1,  0, -1};
+	private int[] yDir = {1, 0, -1,  0};
 	  
 	public PacSimMinimax( int depth, String fname, int te, int gran, int max ) {
 		
-		//Optional: initialize some variables
 		this.depth = depth;
+		fear = 0;
 		
 		PacSim sim = new PacSim( fname, te, gran, max );
 		sim.init(this);
@@ -63,73 +66,68 @@ public class PacSimMinimax implements PacAction {
 		PacCell[][] grid = (PacCell[][]) state;
 		PacmanCell pc = PacUtils.findPacman(grid);
 		
-		PossibleDir score = new PossibleDir();
-		//HashMap<Point,Integer> visitedCopy = copyHash(visited);
-		minimax(grid, score, 0, true);
+		List<PossibleDir> scores = new ArrayList<>();
+		HashMap<Point, Double> visitedCopy = copyHash(visited);
 		
-		Point next = score.getPoint();
+		minimax(grid, new PossibleDir(), scores, visitedCopy, 0, true);
+		
+		scores.sort(Comparator.comparing(PossibleDir::getScore));
+		
+		Point next = scores.get(scores.size() - 1).getPoint();
 		/*
-		if(visited.containsKey(next)) {
-			visited.put(next, visited.get(next) - 10);
-		} else {
-			visited.put(next, -10);
+		for(int i = 0; i < scores.size(); i++) {
+			System.out.println(scores.get(i).getPoint() + " " + scores.get(i).getScore());
 		}
 		*/
+		
+		if(visited.containsKey(next)) {
+			visited.put(next, visited.get(next) - 1.0);
+		} else {
+			visited.put(next, -1.0);
+		}
+
+		//System.out.println();
 		
 		PacFace face = PacUtils.direction(pc.getLoc(), next);
 		return face;
     }
 	
-	public void minimax(PacCell[][] grid, PossibleDir score, int treeDepth, boolean isMax) {
+	public void minimax(PacCell[][] grid, PossibleDir score, List<PossibleDir> scores, HashMap<Point, Double> visitedCopy, int treeDepth, boolean isMax) {
 		if(treeDepth == depth){
+			scores.add(score);
 			return;
 		}
 		
 		PacmanCell pacman = PacUtils.findPacman(grid);
 		List<Point> ghosts = PacUtils.findGhosts(grid);
-		PacCell[][] newGrid = grid.clone();
-		
-		List<PossibleDir> scores = new ArrayList<>();
 		
 		if(isMax == true) {
 			for(int i = 0; i < 4; i++) {
 				PacCell location = grid[pacman.getX() + xDir[i]][pacman.getY() + yDir[i]];
 				Point movement = new Point(location.getX(), location.getY());
-				PossibleDir temp = new PossibleDir();
+				HashMap<Point, Double> visitedCopy2 = copyHash(visitedCopy);
+				PossibleDir temp = score.copy();
+				PacCell[][] newGrid = grid.clone();
 				
 				// Skip if pacman cannot move that direction (temporary)
 				if(location instanceof pacsim.WallCell == true || location instanceof pacsim.HouseCell) {
 					continue;
 				}
 				
-				newGrid = PacUtils.movePacman(pacman.getLoc(), movement, grid);
-				
 				if(location instanceof pacsim.GhostCell == true) {
-					temp.add(-1000, movement);
+					temp.add(-5000, movement);
 				} else {
-					double val = evaluation(newGrid);
-					temp.add(val, movement);
+					newGrid = PacUtils.movePacman(pacman.getLoc(), movement, newGrid);
+					temp.add(evaluation(newGrid, visitedCopy2), movement);
 				}
 
-				scores.add(temp);
+				minimax(newGrid, temp, scores, visitedCopy2, treeDepth, false);
 			}
-
-			scores.sort(Comparator.comparing(PossibleDir::getScore));
-
-			PossibleDir optimalScore = scores.get(scores.size() - 1);
-			score.add(optimalScore.getScore(), optimalScore.getPoint());
-			
-			PacCell[][] optimalGrid = grid.clone();
-			
-			if(optimalScore.getScore() != -1000){
-				optimalGrid = PacUtils.movePacman(pacman.getLoc(), optimalScore.getPoint(), optimalGrid);
-			}
-			
-			minimax(optimalGrid, score, treeDepth, false);	
 			
 		} else {
 			for(int i = 0; i < 4; i++) {
 				PacCell ghost1 = grid[ghosts.get(0).x + xDir[i]][ghosts.get(0).y + yDir[i]];
+				PacCell[][] newGrid = grid.clone();
 				
 				// Skip if ghost cannot move that direction (temporary)
 				if(ghost1 instanceof pacsim.WallCell == true) {
@@ -138,7 +136,7 @@ public class PacSimMinimax implements PacAction {
 				
 				for(int j = 0; j < 4; j++) {
 					PacCell ghost2 = grid[ghosts.get(1).x + xDir[j]][ghosts.get(1).y + yDir[j]];
-					PossibleDir temp = new PossibleDir();
+					PossibleDir temp = score.copy();
 					
 					// Skip if ghost cannot move that direction (temporary)
 					if(ghost2 instanceof pacsim.WallCell == true) {
@@ -146,32 +144,20 @@ public class PacSimMinimax implements PacAction {
 					}
 					
 					if(ghost1 instanceof pacsim.PacCell == true || ghost2 instanceof pacsim.PacCell == true) {
-						temp.add(-1000, null);
+						temp.add(-5000, null);
 					} else {
-						double val = evaluation(newGrid);
-						temp.add(val, null);
+						newGrid = PacUtils.moveGhost(ghosts.get(0), ghost1.getLoc(), newGrid);
+						newGrid = PacUtils.moveGhost(ghosts.get(1), ghost2.getLoc(), newGrid);
+						temp.add(evaluation(newGrid, visitedCopy), null);
 					}
 					
-					scores.add(temp);
+					minimax(newGrid, temp, scores, visitedCopy, treeDepth + 1, true);
 				}
-			}
-			
-			scores.sort(Comparator.comparing(PossibleDir::getScore));
-
-			PossibleDir optimalScore = scores.get(0);
-			score.add(optimalScore.getScore(), optimalScore.getPoint());
-			
-			PacCell[][] optimalGrid = grid.clone();
-			
-			if(optimalScore.getScore() != -1000){
-				optimalGrid = PacUtils.movePacman(pacman.getLoc(), optimalScore.getPoint(), optimalGrid);
-			}
-			System.out.println();
-			minimax(optimalGrid, score, treeDepth + 1, true);	
+			}	
 		}
 	}
 	
-	public double evaluation(PacCell[][] grid) {
+	public double evaluation(PacCell[][] grid, HashMap<Point,Double> visitedCopy) {
 		PacmanCell pacman = PacUtils.findPacman(grid);
 		List<Point> ghosts = PacUtils.findGhosts(grid);
 		double food = PacUtils.numFood(grid);
@@ -182,26 +168,53 @@ public class PacSimMinimax implements PacAction {
 		
 		for(int i = 0; i < ghosts.size(); i++) {
 			PacCell ghost = grid[ghosts.get(i).x][ghosts.get(i).y];
-			double distance = BFSPath.getPath(grid, pacman.getLoc(), ghost.getLoc()).size();
-			score -= 1.0 / distance;
+			
+			GhostCell mode = (GhostCell) ghost;
+			
+			if(mode.getMode().toString() != "FEAR") {
+				double distance = BFSPath.getPath(grid, pacman.getLoc(), ghost.getLoc()).size();
+				score -= (1.0 / distance) * 2;
+			}
 		}
+		/*
+		for(int i = 0; i < 4; i++) {
+			PacCell location = grid[pacman.getX() + xDir[i]][pacman.getY() + yDir[i]];
+			
+			if(location instanceof pacsim.WallCell == true || location instanceof pacsim.HouseCell) {
+				score -= 1;
+			}
+		}*/
 		
 		//score += PacUtils.manhattanDistance(ghosts.get(0), ghosts.get(1));
 		
-		score += 1.0 / food;
-		score += 1.0 / power;
+		if(food != 0) {
+			score += (1.0 / food);
+		}
 		
-		score += 1.0 / PacUtils.manhattanDistance(pacman.getLoc(), near);
+		if(power != 0) {
+			score += (1.0 / power);
+		}
 		
-		System.out.println(score);
+		if(near != null) {
+			score += (1.0 / BFSPath.getPath(grid, pacman.getLoc(), near).size());
+		}
+		//score += (1.0 / PacUtils.manhattanDistance(pacman.getLoc(), near)) * 5;
+
+		if(visitedCopy.containsKey(pacman.getLoc())) {
+			score += visitedCopy.get(pacman.getLoc());
+			visitedCopy.put(pacman.getLoc(), visitedCopy.get(pacman.getLoc()) - 1.0);
+		} else {
+			visitedCopy.put(pacman.getLoc(), -1.0);
+		}
+		
 		return score;
 	}
 
-	public HashMap<Point,Integer> copyHash(HashMap<Point,Integer> table){
-			HashMap<Point,Integer> temp = new HashMap<Point,Integer>(table);
-			temp.putAll(table);
-			return temp;
-		}
+	public HashMap<Point, Double> copyHash(HashMap<Point, Double> table){
+		HashMap<Point, Double> temp = new HashMap<Point, Double>(table);
+		temp.putAll(table);
+		return temp;
+	}
 	
 	class PossibleDir {
 		private Point point;
