@@ -22,6 +22,7 @@ public class PacSimMinimax implements PacAction {
 	// Up, Right, Down, Left
 	private int[] xDir = {0, 1,  0, -1};
 	private int[] yDir = {1, 0, -1,  0};
+	private Point[] points = new Point[8];
 	  
 	public PacSimMinimax( int depth, String fname, int te, int gran, int max ) {
 		
@@ -58,6 +59,7 @@ public class PacSimMinimax implements PacAction {
 	@Override
 	public void init() {
 		visited = new HashMap<>();
+		populatePoints();
 	}
 	   
 	@Override
@@ -170,10 +172,10 @@ public class PacSimMinimax implements PacAction {
 			PacCell ghost = grid[ghosts.get(i).x][ghosts.get(i).y];
 			
 			GhostCell mode = (GhostCell) ghost;
-			
+			// Never showed fear
 			if(mode.getMode().toString() != "FEAR") {
 				double distance = BFSPath.getPath(grid, pacman.getLoc(), ghost.getLoc()).size();
-				score -= (1.0 / distance) * 2;
+				score -= (1.0 / distance) * 4;
 			}
 		}
 		/*
@@ -206,8 +208,35 @@ public class PacSimMinimax implements PacAction {
 		} else {
 			visitedCopy.put(pacman.getLoc(), -1.0);
 		}
+
+		score -= (BFSPath.getPath(grid, pacman.getLoc(), findPoint(grid, pacman.getLoc())).size()) / 2;
 		
 		return score;
+	}
+
+	public void populatePoints(){
+		points[0] = new Point(4,3);
+		points[1] = new Point(3,5);
+		points[2] = new Point(4,7);
+		points[3] = new Point(6,7);
+		points[4] = new Point(6,3);
+		points[5] = new Point(13,7);
+		points[6] = new Point(13,3); 
+		points[7] = new Point(16,5);
+	}
+
+	public Point findPoint(PacCell[][] grid, Point pc){
+		double min = 10000;
+		int index = 0;
+
+		for(int i = 0; i < points.length; i++){
+			if (BFSPath.getPath(grid, pc, points[i]).size() < min){
+				min = BFSPath.getPath(grid, pc, points[i]).size();
+				index = i;
+			}
+		}
+
+		return points[index];
 	}
 
 	public HashMap<Point, Double> copyHash(HashMap<Point, Double> table){
